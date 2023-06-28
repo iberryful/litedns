@@ -1,0 +1,18 @@
+server:
+  listen: "0.0.0.0:8080"
+
+remotes:
+  - name: 114
+    uris:
+    - udp://114.114.114.114:53
+  - name: google
+    uris:
+    - doh://8.8.8.8/resolve?verify=false
+    - doh://8.8.4.4/resolve?verify=false
+
+rules:
+  - DOMAIN-SUFFIX, google.com, google
+  - DOMAIN-KEYWORD, bing, google
+  - DOMAIN, baidu.com, 114
+  - GEOSITE, CN, 114
+  - MATCH, 114

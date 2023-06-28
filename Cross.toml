@@ -1,0 +1,9 @@
+[target.x86_64-unknown-linux-musl]
+pre-build = [
+    "apt-get update && apt-get install --assume-yes pkg-config protobuf-compiler libssl-dev"
+]
+[target.aarch64-unknown-linux-musl]
+pre-build = [
+    "dpkg --add-architecture arm64",
+    "apt-get update && apt-get install --assume-yes pkg-config protobuf-compiler libssl-dev:arm64 libssl-dev"
+]
