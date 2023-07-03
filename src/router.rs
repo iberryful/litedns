@@ -92,10 +92,13 @@ impl TryFrom<Configuration> for Router {
 }
 
 impl Router {
-    pub fn route(&self, domain: &str) -> Option<String> {
+    pub fn route(&self, domain: &str) -> Option<Route> {
         for matcher in self.matchers.iter() {
             if matcher.match_domain(domain) {
-                return Some(matcher.resolver_name());
+                return Some(Route {
+                    remote: matcher.resolver_name(),
+                    opts: matcher.opts(),
+                });
             }
         }
         None

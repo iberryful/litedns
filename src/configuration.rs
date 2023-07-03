@@ -79,6 +79,7 @@ pub enum Ipv6Setting {
     Disable,
     Prefer,
     Defer,
+    Only,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

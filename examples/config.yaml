@@ -12,9 +12,9 @@ remotes:
       - doh://8.8.4.4?sni=dns.google
 
 rules:
-  - DOMAIN-SUFFIX, google.com, google || ipv6=defer&ipset=abc
-  - DOMAIN-KEYWORD, bing, google
-  - DOMAIN, baidu.com, 114
-  - GEOSITE, NETFLIX, google
+  - DOMAIN-SUFFIX, google.com, google || ipv6=disable
+  - DOMAIN-KEYWORD, bing, google || ipv6=only
+  - DOMAIN, baidu.com, 114 || ipv6=prefer
+  - GEOSITE, NETFLIX, google || ipv6=prefer
   - GEOSITE, CN, 114
   - MATCH, 114

@@ -1,4 +1,4 @@
-use crate::configuration::Configuration;
+use crate::configuration::{Configuration, Ipv6Setting};
 use crate::router::Router;
 use anyhow::{anyhow, Result};
 use log::{debug, error, info};
@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::lookup::Lookup;
+use trust_dns_resolver::proto::rr::Record;
 use trust_dns_resolver::{AsyncResolver, TokioAsyncResolver};
 use trust_dns_server::authority::MessageResponseBuilder;
 use trust_dns_server::proto::op::{Header, ResponseCode};
@@ -48,23 +48,55 @@ impl DNSRequestHandler {
         })
     }
 
-    async fn handle_dns_request(&self, request: &Request) -> Result<Lookup> {
+    async fn handle_dns_request(&self, request: &Request) -> Result<Vec<Record>> {
         let raw_query = request.query().name().to_string();
         let domain = raw_query
             .strip_suffix('.')
             .unwrap_or(raw_query.as_str())
             .to_string();
-        let remote = self
+        let route = self
             .router
             .lock()
             .await
             .route(domain.as_str())
             .ok_or(anyhow!("no route found for {}", domain))?;
 
+        let remote = route.remote.clone();
         let resolver = self
             .resolvers
             .get(remote.as_str())
             .ok_or(anyhow!("resolver {} not found", remote))?;
+
+        if request.query().query_type() == RecordType::A && route.opts.ipv6 == Ipv6Setting::Only {
+            return Ok(vec![]);
+        }
+        if request.query().query_type() == RecordType::AAAA
+            && route.opts.ipv6 == Ipv6Setting::Disable
+        {
+            return Ok(vec![]);
+        }
+
+        if request.query().query_type() == RecordType::AAAA && route.opts.ipv6 == Ipv6Setting::Defer
+            || request.query().query_type() == RecordType::A
+                && route.opts.ipv6 == Ipv6Setting::Prefer
+        {
+            let (v4, v6) = dual_stack_resolve(resolver, domain.clone()).await;
+            match route.opts.ipv6 {
+                Ipv6Setting::Defer => {
+                    if !v4.is_empty() {
+                        return Ok(v4);
+                    };
+                    return Ok(v6);
+                }
+                Ipv6Setting::Prefer => {
+                    if !v6.is_empty() {
+                        return Ok(v6);
+                    }
+                    return Ok(v4);
+                }
+                _ => {}
+            }
+        }
 
         info!(
             "DNS Request {} {} is dispatched to -> {}",
@@ -76,8 +108,12 @@ impl DNSRequestHandler {
         let res = resolver
             .lookup(request.query().name(), request.query().query_type())
             .await?;
-        debug!("DNS Response for {:?}: {:?}", res.query(), res.records());
-        Ok(res)
+
+        res.records().iter().for_each(|r| {
+            debug!("DNS Response for {:?}: {:?}", res.query(), r);
+        });
+
+        Ok(res.records().to_vec())
     }
 }
 
@@ -107,6 +143,7 @@ impl RequestHandler for DNSRequestHandler {
 
         let response = self.handle_dns_request(request).await;
         if response.is_err() {
+            error!("Failed to handle request: {:?}", response);
             let res = builder.error_msg(&header, ResponseCode::ServFail);
             return r.to_owned().send_response(res).await.unwrap_or_else(|e| {
                 error!("Failed to send response: {:?}", e);
@@ -115,11 +152,26 @@ impl RequestHandler for DNSRequestHandler {
         }
 
         let response = response.unwrap();
-        let res = builder.build(header, response.record_iter(), &[], &[], &[]);
+        let res = builder.build(header, response.iter(), &[], &[], &[]);
 
         return r.to_owned().send_response(res).await.unwrap_or_else(|e| {
             error!("Failed to send response: {:?}", e);
             header.into()
         });
     }
+}
+
+async fn dual_stack_resolve(
+    resolver: &TokioAsyncResolver,
+    domain: String,
+) -> (Vec<Record>, Vec<Record>) {
+    let (v4, v6) = tokio::join!(
+        resolver.lookup(domain.as_str(), RecordType::A),
+        resolver.lookup(domain.as_str(), RecordType::AAAA),
+    );
+
+    (
+        v4.map_or_else(|_| vec![], |l| l.records().to_vec()),
+        v6.map_or_else(|_| vec![], |l| l.records().to_vec()),
+    )
 }
