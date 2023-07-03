@@ -1,4 +1,4 @@
-use crate::configuration::{Configuration, Rule};
+use crate::configuration::{Configuration, Rule, RuleOpts};
 use crate::geosite::{SiteGroup, SiteGroupList};
 use crate::matcher::Matcher;
 use crate::matcher::*;
@@ -23,6 +23,12 @@ pub struct Router {
     matchers: Vec<Box<dyn Matcher + Send>>,
 }
 
+#[derive(Clone, Debug)]
+pub struct Route {
+    pub remote: String,
+    pub opts: RuleOpts,
+}
+
 impl TryFrom<Configuration> for Router {
     type Error = anyhow::Error;
 
@@ -32,29 +38,52 @@ impl TryFrom<Configuration> for Router {
 
         for rule in conf.rules.iter() {
             match rule {
-                Rule::Domain { value, remote } => {
-                    matchers.push(Box::new(DomainMatcher::new(value.clone(), remote.clone())));
+                Rule::Domain {
+                    value,
+                    remote,
+                    opts,
+                } => {
+                    matchers.push(Box::new(DomainMatcher::new(
+                        value.clone(),
+                        remote.clone(),
+                        opts.clone(),
+                    )));
                 }
-                Rule::DomainSuffix { value, remote } => {
+                Rule::DomainSuffix {
+                    value,
+                    remote,
+                    opts,
+                } => {
                     matchers.push(Box::new(DomainSuffixMatcher::new(
                         value.clone(),
                         remote.clone(),
+                        opts.clone(),
                     )));
                 }
-                Rule::DomainKeyword { value, remote } => {
+                Rule::DomainKeyword {
+                    value,
+                    remote,
+                    opts,
+                } => {
                     matchers.push(Box::new(DomainKeywordMatcher::new(
                         value.clone(),
                         remote.clone(),
+                        opts.clone(),
                     )));
                 }
-                Rule::GEOSITE { value, remote } => {
+                Rule::GeoSite {
+                    value,
+                    remote,
+                    opts,
+                } => {
                     matchers.push(Box::new(GeoSiteMatcher::new(
                         get_sites(&sites, value.as_str())?,
                         remote.clone(),
+                        opts.clone(),
                     )));
                 }
-                Rule::MATCH { remote } => {
-                    matchers.push(Box::new(MatchAllMatcher::new(remote.clone())));
+                Rule::Match { remote, opts } => {
+                    matchers.push(Box::new(MatchAllMatcher::new(remote.clone(), opts.clone())));
                 }
             }
         }

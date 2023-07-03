@@ -45,11 +45,47 @@ pub struct EndpointGroup {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(try_from = "String")]
 pub enum Rule {
-    Domain { value: String, remote: String },
-    DomainSuffix { value: String, remote: String },
-    DomainKeyword { value: String, remote: String },
-    GEOSITE { value: String, remote: String },
-    MATCH { remote: String },
+    Domain {
+        value: String,
+        remote: String,
+        opts: RuleOpts,
+    },
+    DomainSuffix {
+        value: String,
+        remote: String,
+        opts: RuleOpts,
+    },
+    DomainKeyword {
+        value: String,
+        remote: String,
+        opts: RuleOpts,
+    },
+    GeoSite {
+        value: String,
+        remote: String,
+        opts: RuleOpts,
+    },
+    Match {
+        remote: String,
+        opts: RuleOpts,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Ipv6Setting {
+    #[default]
+    Enable,
+    Disable,
+    Prefer,
+    Defer,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct RuleOpts {
+    pub ipv6: Ipv6Setting,
+    pub ipset: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -149,36 +185,65 @@ impl From<Endpoint> for NameServerConfig {
     }
 }
 
+impl Default for RuleOpts {
+    fn default() -> Self {
+        RuleOpts {
+            ipv6: Ipv6Setting::Enable,
+            ipset: None,
+        }
+    }
+}
+
 impl TryFrom<&str> for Rule {
     type Error = anyhow::Error;
 
     fn try_from(s: &str) -> std::result::Result<Self, Self::Error> {
         let mut parts = s
+            .split("||")
+            .map(|part| part.trim())
+            .filter(|part| !part.is_empty())
+            .map(String::from);
+
+        let rule_str = parts.next().ok_or(anyhow!("empty rule"))?;
+        let mut rule_parts = rule_str
             .split(',')
             .map(|part| part.trim())
             .filter(|part| !part.is_empty())
             .map(String::from);
 
-        let rule_type = parts.next().ok_or(anyhow!("missing rule type"))?;
-        let value = parts.next().ok_or(anyhow!("missing rule value"))?;
+        let rule_type = rule_parts.next().ok_or(anyhow!("missing rule type"))?;
+        let value = rule_parts.next().ok_or(anyhow!("missing rule value"))?;
+
+        let opts = match parts.next() {
+            Some(s) => serde_urlencoded::from_str::<RuleOpts>(s.as_str())?,
+            None => RuleOpts::default(),
+        };
+
         match rule_type.as_str() {
             "DOMAIN" => Ok(Rule::Domain {
                 value,
-                remote: parts.next().ok_or(anyhow!("missing remote"))?,
+                remote: rule_parts.next().ok_or(anyhow!("missing remote"))?,
+                opts,
             }),
             "DOMAIN-SUFFIX" => Ok(Rule::DomainSuffix {
                 value,
-                remote: parts.next().ok_or(anyhow!("missing remote"))?,
+                remote: rule_parts.next().ok_or(anyhow!("missing remote"))?,
+                opts,
             }),
             "DOMAIN-KEYWORD" => Ok(Rule::DomainKeyword {
                 value,
-                remote: parts.next().ok_or(anyhow!("missing remote"))?,
+                remote: rule_parts.next().ok_or(anyhow!("missing remote"))?,
+                opts,
             }),
-            "GEOSITE" => Ok(Rule::GEOSITE {
+            "GEOSITE" => Ok(Rule::GeoSite {
                 value,
-                remote: parts.next().ok_or(anyhow!("missing remote"))?,
+                remote: rule_parts.next().ok_or(anyhow!("missing remote"))?,
+                opts,
             }),
-            "MATCH" => Ok(Rule::MATCH { remote: value }),
+            "MATCH" => Ok(Rule::Match {
+                remote: value,
+                opts,
+            }),
             _ => Err(anyhow!("invalid rule type: {}", rule_type)),
         }
     }
@@ -217,7 +282,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::configuration::{Configuration, Endpoint, Protocol, Rule};
+    use crate::configuration::{Configuration, Endpoint, Ipv6Setting, Protocol, Rule, RuleOpts};
     use std::net::{IpAddr, Ipv4Addr};
     use std::path::PathBuf;
 
@@ -257,37 +322,51 @@ mod test {
     fn test_parse_rule_ok() {
         let cases = vec![
             (
-                "DOMAIN,google.com,google",
+                "DOMAIN,google.com,google || ",
                 Ok(Rule::Domain {
                     value: "google.com".to_string(),
                     remote: "google".to_string(),
+                    opts: Default::default(),
                 }),
             ),
             (
-                "DOMAIN-SUFFIX,google.com,google",
+                "DOMAIN-SUFFIX,google.com,google||ipv6=disable",
                 Ok(Rule::DomainSuffix {
                     value: "google.com".to_string(),
                     remote: "google".to_string(),
+                    opts: RuleOpts {
+                        ipv6: Ipv6Setting::Disable,
+                        ipset: None,
+                    },
                 }),
             ),
             (
-                "DOMAIN-KEYWORD,google.com,google",
+                "DOMAIN-KEYWORD,google.com,google||ipset=local",
                 Ok(Rule::DomainKeyword {
                     value: "google.com".to_string(),
                     remote: "google".to_string(),
+                    opts: RuleOpts {
+                        ipv6: Ipv6Setting::Enable,
+                        ipset: Some("local".to_string()),
+                    },
                 }),
             ),
             (
-                "GEOSITE,CN,google",
-                Ok(Rule::GEOSITE {
+                "GEOSITE,CN,google||ipv6=defer&ipset=block",
+                Ok(Rule::GeoSite {
                     value: "CN".to_string(),
                     remote: "google".to_string(),
+                    opts: RuleOpts {
+                        ipv6: Ipv6Setting::Defer,
+                        ipset: Some("block".to_string()),
+                    },
                 }),
             ),
             (
                 "MATCH,google",
-                Ok(Rule::MATCH {
+                Ok(Rule::Match {
                     remote: "google".to_string(),
+                    opts: Default::default(),
                 }),
             ),
             ("MATCH", Err(())),

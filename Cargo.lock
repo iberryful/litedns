@@ -767,6 +767,7 @@ dependencies = [
  "reqwest",
  "rust-embed",
  "serde",
+ "serde_urlencoded",
  "tokio",
  "trust-dns-resolver",
  "trust-dns-server",

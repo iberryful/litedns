@@ -1,14 +1,20 @@
+use crate::configuration::RuleOpts;
 use crate::matcher::Matcher;
 
 #[derive(Debug, Clone)]
 pub struct DomainSuffixMatcher {
     suffix: String,
     remote: String,
+    opts: RuleOpts,
 }
 
 impl DomainSuffixMatcher {
-    pub fn new(suffix: String, remote: String) -> Self {
-        Self { suffix, remote }
+    pub fn new(suffix: String, remote: String, opts: RuleOpts) -> Self {
+        Self {
+            suffix,
+            remote,
+            opts,
+        }
     }
 }
 
@@ -19,5 +25,9 @@ impl Matcher for DomainSuffixMatcher {
 
     fn resolver_name(&self) -> String {
         self.remote.clone()
+    }
+
+    fn opts(&self) -> RuleOpts {
+        self.opts.clone()
     }
 }

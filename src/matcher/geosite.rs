@@ -1,3 +1,4 @@
+use crate::configuration::RuleOpts;
 use crate::geosite::{domain, Domain, SiteGroup};
 use crate::matcher::Matcher;
 use regex::Regex;
@@ -6,6 +7,7 @@ use regex::Regex;
 pub struct GeoSiteMatcher {
     site_group: SiteGroup,
     remote: String,
+    opts: RuleOpts,
 }
 
 impl Matcher for GeoSiteMatcher {
@@ -22,11 +24,19 @@ impl Matcher for GeoSiteMatcher {
     fn resolver_name(&self) -> String {
         self.remote.clone()
     }
+
+    fn opts(&self) -> RuleOpts {
+        self.opts.clone()
+    }
 }
 
 impl GeoSiteMatcher {
-    pub fn new(site_group: SiteGroup, remote: String) -> Self {
-        Self { site_group, remote }
+    pub fn new(site_group: SiteGroup, remote: String, opts: RuleOpts) -> Self {
+        Self {
+            site_group,
+            remote,
+            opts,
+        }
     }
 
     fn geosite_match(&self, domain: &str, site: &Domain) -> bool {
@@ -90,6 +100,7 @@ mod test {
         let matcher = GeoSiteMatcher {
             site_group: site_group.clone(),
             remote: "remote".to_string(),
+            opts: Default::default(),
         };
 
         for (domain, expected) in cases.iter() {
