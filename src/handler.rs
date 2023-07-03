@@ -11,6 +11,7 @@ use trust_dns_resolver::lookup::Lookup;
 use trust_dns_resolver::{AsyncResolver, TokioAsyncResolver};
 use trust_dns_server::authority::MessageResponseBuilder;
 use trust_dns_server::proto::op::{Header, ResponseCode};
+use trust_dns_server::proto::rr::record_type::RecordType;
 
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
 
@@ -75,6 +76,7 @@ impl DNSRequestHandler {
         let res = resolver
             .lookup(request.query().name(), request.query().query_type())
             .await?;
+        debug!("DNS Response for {:?}: {:?}", res.query(), res.records());
         Ok(res)
     }
 }
@@ -86,6 +88,22 @@ impl RequestHandler for DNSRequestHandler {
 
         let builder = MessageResponseBuilder::from_message_request(request);
         let header = Header::response_from_request(request.header());
+
+        match request.query().query_type() {
+            RecordType::A | RecordType::AAAA => {}
+            _ => {
+                let res = builder.error_msg(&header, ResponseCode::Refused);
+                debug!(
+                    "Unsupported query type: {}, {}",
+                    request.query().query_type(),
+                    request.query().name()
+                );
+                return r.to_owned().send_response(res).await.unwrap_or_else(|e| {
+                    error!("Failed to send response: {:?}", e);
+                    header.into()
+                });
+            }
+        }
 
         let response = self.handle_dns_request(request).await;
         if response.is_err() {

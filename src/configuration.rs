@@ -54,10 +54,16 @@ pub enum Rule {
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct Configuration {
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
     pub server: ServerConfig,
     #[serde(deserialize_with = "deserialize_remotes")]
     pub remotes: HashMap<String, EndpointGroup>,
     pub rules: Vec<Rule>,
+}
+
+fn default_log_level() -> String {
+    "info".to_string()
 }
 
 impl Configuration {
@@ -172,9 +178,7 @@ impl TryFrom<&str> for Rule {
                 value,
                 remote: parts.next().ok_or(anyhow!("missing remote"))?,
             }),
-            "MATCH" => Ok(Rule::MATCH {
-                remote: value,
-            }),
+            "MATCH" => Ok(Rule::MATCH { remote: value }),
             _ => Err(anyhow!("invalid rule type: {}", rule_type)),
         }
     }
