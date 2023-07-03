@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+use trust_dns_resolver::error::ResolveErrorKind;
 use trust_dns_resolver::proto::rr::Record;
 use trust_dns_resolver::{AsyncResolver, TokioAsyncResolver};
 use trust_dns_server::authority::MessageResponseBuilder;
@@ -29,7 +30,8 @@ impl DNSRequestHandler {
             .keys()
             .map(|name| {
                 let mut opt = ResolverOpts::default();
-                opt.cache_size = 0;
+                opt.cache_size = 10000;
+                opt.timeout = std::time::Duration::from_secs(1);
                 let eg = conf
                     .remotes
                     .get(name.as_str())
@@ -107,13 +109,27 @@ impl DNSRequestHandler {
 
         let res = resolver
             .lookup(request.query().name(), request.query().query_type())
-            .await?;
-
-        res.records().iter().for_each(|r| {
-            debug!("DNS Response for {:?}: {:?}", res.query(), r);
-        });
-
-        Ok(res.records().to_vec())
+            .await;
+        match res {
+            Err(e) => match e.kind() {
+                ResolveErrorKind::NoRecordsFound { .. } => {
+                    debug!("No records found for {}", domain);
+                    Ok(vec![])
+                }
+                _ => Err(anyhow!(
+                    "failed to resolve {} {}: {}",
+                    request.query().query_type(),
+                    domain,
+                    e
+                )),
+            },
+            Ok(lookup) => {
+                lookup.records().iter().for_each(|r| {
+                    debug!("DNS Response for {:?}: {:?}", lookup.query(), r);
+                });
+                Ok(lookup.records().to_vec())
+            }
+        }
     }
 }
 

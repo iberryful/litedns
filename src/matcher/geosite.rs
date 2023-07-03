@@ -57,7 +57,7 @@ impl GeoSiteMatcher {
                     return true;
                 }
                 let index = domain.len() - site.value.len();
-                domain.as_bytes()[index-1] == b'.'
+                domain.as_bytes()[index - 1] == b'.'
             }
             domain::Type::Plain => domain.contains(site.value.as_str()),
         }
