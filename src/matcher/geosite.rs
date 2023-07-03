@@ -57,7 +57,7 @@ impl GeoSiteMatcher {
                     return true;
                 }
                 let index = domain.len() - site.value.len();
-                domain.as_bytes()[index] == b'.'
+                domain.as_bytes()[index-1] == b'.'
             }
             domain::Type::Plain => domain.contains(site.value.as_str()),
         }
@@ -77,7 +77,7 @@ mod test {
             ("example.com", domain::Type::Full),
             ("keyword", domain::Type::Plain),
             (".a.com", domain::Type::Regex),
-            (".qq.com", domain::Type::Domain),
+            ("qq.com", domain::Type::Domain),
         ];
 
         let cases = [
@@ -87,7 +87,7 @@ mod test {
             ("a.com.cn", false),
             ("b.a.com", true),
             ("baa.q.qq.com", true),
-            ("qq.com", false),
+            ("qq.com", true),
         ];
 
         for (value, r#type) in sites.iter() {
