@@ -17,4 +17,4 @@ rules:
   - DOMAIN, baidu.com, 114 || ipv6=prefer
   - GEOSITE, NETFLIX, google || ipv6=prefer
   - GEOSITE, CN, 114
-  - MATCH, google
+  - MATCH, googlec
