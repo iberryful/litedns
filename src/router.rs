@@ -4,6 +4,7 @@ use crate::matcher::Matcher;
 use crate::matcher::*;
 use anyhow::{anyhow, Result};
 use prost::Message;
+use std::sync::Arc;
 
 use rust_embed::RustEmbed;
 
@@ -19,8 +20,9 @@ pub fn load_geosite() -> Result<SiteGroupList> {
     Ok(geosite)
 }
 
+#[derive(Clone)]
 pub struct Router {
-    matchers: Vec<Box<dyn Matcher + Send>>,
+    matchers: Arc<Vec<Box<dyn Matcher + Sync + Send + 'static>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -33,7 +35,7 @@ impl TryFrom<Configuration> for Router {
     type Error = anyhow::Error;
 
     fn try_from(conf: Configuration) -> std::result::Result<Self, Self::Error> {
-        let mut matchers: Vec<Box<dyn Matcher + Send>> = Vec::new();
+        let mut matchers: Vec<Box<dyn Matcher + Send + Sync + 'static>> = vec![];
         let sites = load_geosite().unwrap();
 
         for rule in conf.rules.iter() {
@@ -87,7 +89,9 @@ impl TryFrom<Configuration> for Router {
                 }
             }
         }
-        Ok(Self { matchers })
+        Ok(Self {
+            matchers: Arc::new(matchers),
+        })
     }
 }
 

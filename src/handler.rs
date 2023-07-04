@@ -4,8 +4,6 @@ use anyhow::{anyhow, Result};
 use log::{debug, error, info};
 
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::error::ResolveErrorKind;
 use trust_dns_resolver::proto::rr::Record;
@@ -20,7 +18,7 @@ use trust_dns_server::server::{Request, RequestHandler, ResponseHandler, Respons
 #[derive(Clone)]
 pub struct DNSRequestHandler {
     resolvers: HashMap<String, TokioAsyncResolver>,
-    router: Arc<Mutex<Router>>,
+    router: Router,
 }
 
 impl DNSRequestHandler {
@@ -44,10 +42,7 @@ impl DNSRequestHandler {
             .collect();
         let resolvers = resolvers?;
         let router = Router::try_from(conf)?;
-        Ok(Self {
-            resolvers,
-            router: Arc::new(Mutex::new(router)),
-        })
+        Ok(Self { resolvers, router })
     }
 
     async fn handle_dns_request(&self, request: &Request) -> Result<Vec<Record>> {
@@ -58,8 +53,6 @@ impl DNSRequestHandler {
             .to_string();
         let route = self
             .router
-            .lock()
-            .await
             .route(domain.as_str())
             .ok_or(anyhow!("no route found for {}", domain))?;
 
