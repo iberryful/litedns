@@ -102,7 +102,7 @@ impl RequestHandler for DNSRequestHandler {
         debug!("New DNS Request: {:?}", request);
 
         let builder = MessageResponseBuilder::from_message_request(request);
-        let header = Header::response_from_request(request.header());
+        let mut header = Header::response_from_request(request.header());
 
         match request.query().query_type() {
             RecordType::A | RecordType::AAAA => {}
@@ -137,6 +137,7 @@ impl RequestHandler for DNSRequestHandler {
                 request.query().query_type(),
                 request.query().name()
             );
+            header.set_response_code(ResponseCode::NXDomain);
         }
 
         let res = builder.build(header, response.iter(), &[], &[], &[]);
