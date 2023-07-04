@@ -4,9 +4,11 @@ use crate::matcher::Matcher;
 use crate::matcher::*;
 use anyhow::{anyhow, Result};
 use prost::Message;
-use std::sync::Arc;
-
 use rust_embed::RustEmbed;
+use std::borrow::BorrowMut;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(RustEmbed)]
 #[folder = "deps/"]
@@ -23,6 +25,7 @@ pub fn load_geosite() -> Result<SiteGroupList> {
 #[derive(Clone)]
 pub struct Router {
     matchers: Arc<Vec<Box<dyn Matcher + Sync + Send + 'static>>>,
+    cache: Arc<RwLock<HashMap<String, usize>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -91,21 +94,34 @@ impl TryFrom<Configuration> for Router {
         }
         Ok(Self {
             matchers: Arc::new(matchers),
+            cache: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 }
 
 impl Router {
-    pub fn route(&self, domain: &str) -> Option<Route> {
-        for matcher in self.matchers.iter() {
-            if matcher.match_domain(domain) {
-                return Some(Route {
-                    remote: matcher.resolver_name(),
-                    opts: matcher.opts(),
-                });
+    pub async fn route(&self, domain: &str) -> Option<Route> {
+        let mut index = self.cache.read().await.get(domain).map(|x| x.to_owned());
+
+        if index.is_none() {
+            for (idx, matcher) in self.matchers.iter().enumerate() {
+                if matcher.match_domain(domain) {
+                    self.cache
+                        .write()
+                        .await
+                        .borrow_mut()
+                        .insert(domain.to_owned(), idx);
+                    index = Some(idx);
+                    break;
+                }
             }
         }
-        None
+        index
+            .and_then(|i| self.matchers.get(i))
+            .map(|matcher| Route {
+                remote: matcher.resolver_name(),
+                opts: matcher.opts(),
+            })
     }
 }
 

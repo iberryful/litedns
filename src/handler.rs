@@ -54,6 +54,7 @@ impl DNSRequestHandler {
         let route = self
             .router
             .route(domain.as_str())
+            .await
             .ok_or(anyhow!("no route found for {}", domain))?;
 
         let remote = route.remote.clone();

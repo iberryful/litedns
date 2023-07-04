@@ -6,9 +6,7 @@ use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::str::FromStr;
-use trust_dns_resolver::config::{
-    NameServerConfig, NameServerConfigGroup, Protocol as DnsProtocol,
-};
+use trust_dns_resolver::config::{NameServerConfig, NameServerConfigGroup, Protocol as DnsProtocol};
 use url::Url;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
