@@ -4,12 +4,15 @@ use anyhow::{anyhow, Result};
 use log::{debug, error, info};
 
 use std::collections::HashMap;
+use std::str::FromStr;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::error::ResolveErrorKind;
 use trust_dns_resolver::proto::rr::Record;
 use trust_dns_resolver::{AsyncResolver, Name, TokioAsyncResolver};
 use trust_dns_server::authority::MessageResponseBuilder;
 use trust_dns_server::proto::op::{Header, ResponseCode};
+use trust_dns_server::proto::rr::RData;
+use trust_dns_server::proto::rr::rdata::SOA;
 use trust_dns_server::proto::rr::record_type::RecordType;
 
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
@@ -138,7 +141,7 @@ impl RequestHandler for DNSRequestHandler {
                 request.query().query_type(),
                 request.query().name()
             );
-            soa.push(Record::with(Name::new(), RecordType::SOA, 60));
+            soa.push(gen_soa());
             header.set_response_code(ResponseCode::NXDomain);
         }
         let res = builder.build(header, response.iter(), &[], &soa, &[]);
@@ -148,6 +151,21 @@ impl RequestHandler for DNSRequestHandler {
             header.into()
         });
     }
+}
+
+fn gen_soa() -> Record {
+    let name = Name::from_str(".").unwrap();
+    let soa_rdata = SOA::new(
+        Name::from_str("fake-ns.litedns.").unwrap(),
+        Name::from_str("fake-hostmaster.litedns.").unwrap(),
+        2023070501, // serial number
+        3600,       // refresh
+        3600,       // retry
+        3600,       // expire
+        60,         // minimum ttl
+    );
+
+    Record::from_rdata(name, 60, RData::SOA(soa_rdata))
 }
 
 async fn single_resolve(req: &Request, resolver: &TokioAsyncResolver) -> Result<Vec<Record>> {
