@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::error::ResolveErrorKind;
 use trust_dns_resolver::proto::rr::Record;
-use trust_dns_resolver::{AsyncResolver, TokioAsyncResolver};
+use trust_dns_resolver::{AsyncResolver, Name, TokioAsyncResolver};
 use trust_dns_server::authority::MessageResponseBuilder;
 use trust_dns_server::proto::op::{Header, ResponseCode};
 use trust_dns_server::proto::rr::record_type::RecordType;
@@ -131,16 +131,17 @@ impl RequestHandler for DNSRequestHandler {
         }
 
         let response = response.unwrap();
+        let mut soa: Vec<Record> = vec![];
         if response.is_empty() {
             debug!(
                 "Send empty response for {} {}",
                 request.query().query_type(),
                 request.query().name()
             );
+            soa.push(Record::with(Name::new(), RecordType::SOA, 60));
             header.set_response_code(ResponseCode::NXDomain);
         }
-
-        let res = builder.build(header, response.iter(), &[], &[], &[]);
+        let res = builder.build(header, response.iter(), &[], &soa, &[]);
 
         return r.to_owned().send_response(res).await.unwrap_or_else(|e| {
             error!("Failed to send response: {:?}", e);
