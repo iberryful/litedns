@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
 
     let conf = Configuration::parse(config_path)?;
     env_logger::Builder::from_default_env()
-        .format_timestamp_secs()
+        .format_timestamp_millis()
         .format_target(false)
         .parse_filters(conf.log_level.clone().as_str())
         .init();

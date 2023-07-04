@@ -29,6 +29,7 @@ impl DNSRequestHandler {
             .map(|name| {
                 let mut opt = ResolverOpts::default();
                 opt.cache_size = 10000;
+                opt.num_concurrent_reqs = 10;
                 opt.timeout = std::time::Duration::from_secs(1);
                 let eg = conf
                     .remotes
@@ -79,14 +80,19 @@ impl DNSRequestHandler {
             remote
         );
 
-        if request.query().query_type() == RecordType::AAAA && route.opts.ipv6 == Ipv6Setting::Defer
+        let records = if request.query().query_type() == RecordType::AAAA
+            && route.opts.ipv6 == Ipv6Setting::Defer
             || request.query().query_type() == RecordType::A
                 && route.opts.ipv6 == Ipv6Setting::Prefer
         {
-            return Ok(dual_stack_resolve(request, resolver, &route.opts, domain).await);
-        }
-
-        single_resolve(request, resolver).await
+            dual_stack_resolve(request, resolver, &route.opts, domain).await
+        } else {
+            single_resolve(request, resolver).await?
+        };
+        records.iter().for_each(|record| {
+            debug!("DNS Response: {:?}", record);
+        });
+        Ok(records)
     }
 }
 
@@ -125,6 +131,14 @@ impl RequestHandler for DNSRequestHandler {
         }
 
         let response = response.unwrap();
+        if response.is_empty() {
+            debug!(
+                "Send empty response for {} {}",
+                request.query().query_type(),
+                request.query().name()
+            );
+        }
+
         let res = builder.build(header, response.iter(), &[], &[], &[]);
 
         return r.to_owned().send_response(res).await.unwrap_or_else(|e| {
@@ -140,10 +154,7 @@ async fn single_resolve(req: &Request, resolver: &TokioAsyncResolver) -> Result<
         .await;
     match res {
         Err(e) => match e.kind() {
-            ResolveErrorKind::NoRecordsFound { .. } => {
-                debug!("No records found for {}", req.query().name());
-                Ok(vec![])
-            }
+            ResolveErrorKind::NoRecordsFound { .. } => Ok(vec![]),
             _ => Err(anyhow!(
                 "failed to resolve {} {}: {}",
                 req.query().query_type(),
@@ -151,12 +162,7 @@ async fn single_resolve(req: &Request, resolver: &TokioAsyncResolver) -> Result<
                 e
             )),
         },
-        Ok(lookup) => {
-            lookup.records().iter().for_each(|r| {
-                debug!("DNS Response for {:?}: {:?}", lookup.query(), r);
-            });
-            Ok(lookup.records().to_vec())
-        }
+        Ok(lookup) => Ok(lookup.records().to_vec()),
     }
 }
 
