@@ -40,7 +40,7 @@ impl DNSRequestHandler {
                     .ok_or(anyhow!("remote {} not found", name.as_str()))?
                     .clone();
                 let cfg = ResolverConfig::from_parts(None, vec![], eg);
-                let resolver = AsyncResolver::tokio(cfg, opt)?;
+                let resolver = AsyncResolver::tokio(cfg, opt);
                 Ok((name.clone(), resolver))
             })
             .collect();

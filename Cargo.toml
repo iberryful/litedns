@@ -17,8 +17,8 @@ config = "0.13"
 prost = "0.11.9"
 serde = { version = "1.0.163", features = ["derive"] }
 tokio = { version = "1.28.1", features = ["macros", "net"] }
-trust-dns-resolver = { version = "0.22.0", features = ["dns-over-rustls", "dns-over-https-rustls"] }
-trust-dns-server = "0.22.0"
+trust-dns-resolver = { git = "https://github.com/iberryful/trust-dns.git", features = ["dns-over-rustls", "dns-over-https-rustls"] }
+trust-dns-server =  { git = "https://github.com/iberryful/trust-dns.git" }
 url = { version = "2.3.1", features = ["serde"] }
 regex = "1"
 rust-embed="6"
