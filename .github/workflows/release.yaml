@@ -27,6 +27,14 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
           override: true
+      - name: Cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}
       - name: compile
         uses: actions-rs/cargo@v1
         with:
@@ -60,6 +68,14 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
           override: true
+      - name: Cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo
       - name: compile
         uses: actions-rs/cargo@v1
         with:
@@ -95,6 +111,14 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
           override: true
+      - name: Cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo
       - name: compile
         uses: actions-rs/cargo@v1
         with:
