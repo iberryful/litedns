@@ -49,7 +49,7 @@ impl DNSRequestHandler {
         Ok(Self { resolvers, router })
     }
 
-    async fn handle_dns_request(&self, request: &Request) -> Result<Vec<Record>> {
+    async fn handle_dns_request(&self, request: &Request) -> Result<(Vec<Record>, ResponseCode)> {
         let raw_query = request.query().name().to_string();
         let domain = raw_query
             .strip_suffix('.')
@@ -68,12 +68,12 @@ impl DNSRequestHandler {
             .ok_or(anyhow!("resolver {} not found", remote))?;
 
         if request.query().query_type() == RecordType::A && route.opts.ipv6 == Ipv6Setting::Only {
-            return Ok(vec![]);
+            return Ok((vec![], ResponseCode::NXDomain));
         }
         if request.query().query_type() == RecordType::AAAA
             && route.opts.ipv6 == Ipv6Setting::Disable
         {
-            return Ok(vec![]);
+            return Ok((vec![], ResponseCode::NXDomain));
         }
 
         info!(
@@ -83,7 +83,7 @@ impl DNSRequestHandler {
             remote
         );
 
-        let records = if request.query().query_type() == RecordType::AAAA
+        let (records, code) = if request.query().query_type() == RecordType::AAAA
             && route.opts.ipv6 == Ipv6Setting::Defer
             || request.query().query_type() == RecordType::A
                 && route.opts.ipv6 == Ipv6Setting::Prefer
@@ -95,7 +95,7 @@ impl DNSRequestHandler {
         records.iter().for_each(|record| {
             debug!("DNS Response: {:?}", record);
         });
-        Ok(records)
+        Ok((records, code))
     }
 }
 
@@ -133,18 +133,18 @@ impl RequestHandler for DNSRequestHandler {
             });
         }
 
-        let response = response.unwrap();
+        let (records, code) = response.unwrap();
         let mut soa: Vec<Record> = vec![];
-        if response.is_empty() {
+        if records.is_empty() {
             debug!(
                 "Send empty response for {} {}",
                 request.query().query_type(),
                 request.query().name()
             );
             soa.push(gen_soa());
-            header.set_response_code(ResponseCode::NXDomain);
+            header.set_response_code(code);
         }
-        let res = builder.build(header, response.iter(), &[], &soa, &[]);
+        let res = builder.build(header, records.iter(), &[], &soa, &[]);
 
         return r.to_owned().send_response(res).await.unwrap_or_else(|e| {
             error!("Failed to send response: {:?}", e);
@@ -168,13 +168,16 @@ fn gen_soa() -> Record {
     Record::from_rdata(name, 60, RData::SOA(soa_rdata))
 }
 
-async fn single_resolve(req: &Request, resolver: &TokioAsyncResolver) -> Result<Vec<Record>> {
+async fn single_resolve(
+    req: &Request,
+    resolver: &TokioAsyncResolver,
+) -> Result<(Vec<Record>, ResponseCode)> {
     let res = resolver
         .lookup(req.query().name(), req.query().query_type())
         .await;
     match res {
         Err(e) => match e.kind() {
-            ResolveErrorKind::NoRecordsFound { .. } => Ok(vec![]),
+            ResolveErrorKind::NoRecordsFound { response_code, .. } => Ok((vec![], *response_code)),
             _ => Err(anyhow!(
                 "failed to resolve {} {}: {}",
                 req.query().query_type(),
@@ -182,7 +185,7 @@ async fn single_resolve(req: &Request, resolver: &TokioAsyncResolver) -> Result<
                 e
             )),
         },
-        Ok(lookup) => Ok(lookup.records().to_vec()),
+        Ok(lookup) => Ok((lookup.records().to_vec(), ResponseCode::NoError)),
     }
 }
 
@@ -191,7 +194,7 @@ async fn dual_stack_resolve(
     resolver: &TokioAsyncResolver,
     opts: &RuleOpts,
     domain: String,
-) -> Vec<Record> {
+) -> (Vec<Record>, ResponseCode) {
     let (r1, r2) = tokio::join!(
         resolver.lookup(domain.as_str(), RecordType::A),
         resolver.lookup(domain.as_str(), RecordType::AAAA),
@@ -202,12 +205,11 @@ async fn dual_stack_resolve(
     );
 
     let is_ipv6 = req.query().query_type() == RecordType::AAAA;
-    match opts.ipv6 {
+    let records: Vec<Record> = match opts.ipv6 {
         Ipv6Setting::Defer => {
             if !is_ipv6 {
-                return v4;
-            }
-            if v4.is_empty() {
+                v4
+            } else if v4.is_empty() {
                 v6
             } else {
                 vec![]
@@ -215,9 +217,8 @@ async fn dual_stack_resolve(
         }
         Ipv6Setting::Prefer => {
             if is_ipv6 {
-                return v6;
-            }
-            if v6.is_empty() {
+                v6
+            } else if v6.is_empty() {
                 v4
             } else {
                 vec![]
@@ -226,5 +227,12 @@ async fn dual_stack_resolve(
         _ => {
             vec![]
         }
-    }
+    };
+    let code = if records.is_empty() {
+        ResponseCode::NXDomain
+    } else {
+        ResponseCode::NoError
+    };
+
+    (records, code)
 }
