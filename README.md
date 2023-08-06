@@ -52,8 +52,8 @@ ipv6 setting can be one of the following values:
 - enable: enable ipv6
 - disable: disable ipv6, return `REFUSED` for AAAA request
 - only: only use ipv6, return `REFUSED` for A request
-- prefer: prefer ipv6, lookup A and AAAA request in parallel when A request is received, return A record if it's available, otherwise return AAAA record
-- defer: defer ipv6, lookup A and AAAA request in parallel when AAAA request is received, return AAAA record if it's available, otherwise return A record
+- prefer: prefer ipv6, lookup A and AAAA request in parallel when A request is received, return AAAA record if it's available, otherwise return A record
+- defer: defer ipv6, lookup A and AAAA request in parallel when AAAA request is received, return A record if it's available, otherwise return AAAA record
 
 ### geosite
 Litedns embeds [geosite](https://github.com/Loyalsoldier/v2ray-rules-dat) database, it can be used to route DNS request based on client's location.
