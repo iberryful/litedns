@@ -16,5 +16,5 @@ rules:
   - DOMAIN-KEYWORD, bing, google || ipv6=only
   - DOMAIN, baidu.com, 114 || ipv6=prefer
   - GEOSITE, NETFLIX, google || ipv6=prefer
-  - GEOSITE, CN, 114
+  - GEOSITE, CN, 114 || ipset4=cn4&ipset6=cn6
   - MATCH, google

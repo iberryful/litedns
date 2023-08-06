@@ -84,7 +84,8 @@ pub enum Ipv6Setting {
 #[serde(default)]
 pub struct RuleOpts {
     pub ipv6: Ipv6Setting,
-    pub ipset: Option<String>,
+    pub ipset4: Option<String>,
+    pub ipset6: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -188,7 +189,8 @@ impl Default for RuleOpts {
     fn default() -> Self {
         RuleOpts {
             ipv6: Ipv6Setting::Enable,
-            ipset: None,
+            ipset4: None,
+            ipset6: None,
         }
     }
 }
@@ -335,29 +337,32 @@ mod test {
                     remote: "google".to_string(),
                     opts: RuleOpts {
                         ipv6: Ipv6Setting::Disable,
-                        ipset: None,
+                        ipset4: None,
+                        ipset6: None,
                     },
                 }),
             ),
             (
-                "DOMAIN-KEYWORD,google.com,google||ipset=local",
+                "DOMAIN-KEYWORD,google.com,google||ipset4=local",
                 Ok(Rule::DomainKeyword {
                     value: "google.com".to_string(),
                     remote: "google".to_string(),
                     opts: RuleOpts {
                         ipv6: Ipv6Setting::Enable,
-                        ipset: Some("local".to_string()),
+                        ipset4: Some("local".to_string()),
+                        ipset6: None,
                     },
                 }),
             ),
             (
-                "GEOSITE,CN,google||ipv6=defer&ipset=block",
+                "GEOSITE,CN,google||ipv6=defer&ipset6=block",
                 Ok(Rule::GeoSite {
                     value: "CN".to_string(),
                     remote: "google".to_string(),
                     opts: RuleOpts {
                         ipv6: Ipv6Setting::Defer,
-                        ipset: Some("block".to_string()),
+                        ipset4: None,
+                        ipset6: Some("block".to_string()),
                     },
                 }),
             ),

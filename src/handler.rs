@@ -4,6 +4,8 @@ use anyhow::{anyhow, Result};
 use log::{debug, error, info};
 
 use std::collections::HashMap;
+#[cfg(target_os = "linux")]
+use std::process::Command;
 use std::str::FromStr;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::error::ResolveErrorKind;
@@ -14,9 +16,7 @@ use trust_dns_server::proto::op::{Header, ResponseCode};
 use trust_dns_server::proto::rr::RData;
 use trust_dns_server::proto::rr::rdata::SOA;
 use trust_dns_server::proto::rr::record_type::RecordType;
-
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
-
 /// DNS Request Handler
 #[derive(Clone)]
 pub struct DNSRequestHandler {
@@ -46,6 +46,7 @@ impl DNSRequestHandler {
             .collect();
         let resolvers = resolvers?;
         let router = Router::try_from(conf)?;
+
         Ok(Self { resolvers, router })
     }
 
@@ -94,9 +95,43 @@ impl DNSRequestHandler {
         };
         records.iter().for_each(|record| {
             debug!("DNS Response: {:?}", record);
+            #[cfg(target_os = "linux")]
+            if let Err(err) = try_ipset_add(record, &route.opts) {
+                error!("Failed to add ip to ipset: {:?}", err);
+            }
         });
         Ok((records, code))
     }
+}
+
+#[cfg(target_os = "linux")]
+fn try_ipset_add(record: &Record, opts: &RuleOpts) -> Result<()> {
+    let mut ipset = None;
+    if record.record_type() == RecordType::A && opts.ipset4.is_some() {
+        ipset = opts.ipset4.clone();
+    };
+    if record.record_type() == RecordType::AAAA && opts.ipset6.is_some() {
+        ipset = opts.ipset6.clone();
+    }
+
+    if let Some(ipset) = ipset {
+        if let Some(rdata) = record.data() {
+            if let Some(ip) = rdata.ip_addr() {
+                let output = Command::new("ipset")
+                    .arg("add")
+                    .arg(ipset)
+                    .arg(ip.to_string())
+                    .output()?;
+
+                if !output.status.success() {
+                    let err = String::from_utf8_lossy(&output.stderr);
+                    return Err(anyhow!("Failed to add ip to ipset: {}", err));
+                }
+            }
+        }
+    };
+
+    Ok(())
 }
 
 #[async_trait::async_trait]

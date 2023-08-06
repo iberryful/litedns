@@ -9,6 +9,7 @@ Litedns is a lightweight DNS server written in Rust. It's design to be simple an
 - [x] built-in DNS cache
 - [x] built-in ipv6 setting
 - [x] built with musl, no annoying glibc version issues
+- [x] ipset support
 
 ## Usage
 
@@ -41,7 +42,7 @@ rules:
   - DOMAIN-KEYWORD, bing, google || ipv6=only
   - DOMAIN, baidu.com, 114 || ipv6=prefer
   - GEOSITE, NETFLIX, google || ipv6=defer
-  - GEOSITE, CN, 114
+  - GEOSITE, CN, 114, ipset4=cn&ipset6=cn6
   - MATCH, google
 ```
 
