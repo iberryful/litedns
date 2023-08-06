@@ -119,12 +119,15 @@ fn try_ipset_add(record: &Record, opts: &RuleOpts) -> Result<()> {
             if let Some(ip) = rdata.ip_addr() {
                 let output = Command::new("ipset")
                     .arg("add")
-                    .arg(ipset)
+                    .arg(ipset.clone())
                     .arg(ip.to_string())
                     .output()?;
-
+                debug!("Added ip {} to ipset {}", ip, ipset.clone());
                 if !output.status.success() {
                     let err = String::from_utf8_lossy(&output.stderr);
+                    if err.contains("already added") {
+                        return Ok(());
+                    }
                     return Err(anyhow!("Failed to add ip to ipset: {}", err));
                 }
             }
