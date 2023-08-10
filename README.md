@@ -36,15 +36,21 @@ remotes:
       - doh://8.8.8.8?sni=dns.google
       - doh://8.8.4.4?sni=dns.google
 
-# ipv6 setting: disable, only, prefer, defer, enable(default)
 rules:
   - DOMAIN-SUFFIX, google.com, google || ipv6=disable
   - DOMAIN-KEYWORD, bing, google || ipv6=only
   - DOMAIN, baidu.com, 114 || ipv6=prefer
-  - GEOSITE, NETFLIX, google || ipv6=defer
+  - GEOSITE, NETFLIX, google || ipv6=defer&enable_https=true
   - GEOSITE, CN, 114, ipset4=cn&ipset6=cn6
   - MATCH, google
 ```
+
+### route options
+Additional options can be applied to routing rules using urlencode. Supported options are as follows:
+- `ipv6`: `disable, only, prefer, defer, enable(default)`
+- `ipset4`: `add resolved IPv4 addresses to specified ipset`
+- `ipset6`: `add resolved IPv6 addresses to specified ipset`
+- `enable_https`: `enable record type HTTPS(type 65), default is false`
 
 ### ipv6 setting
 ipv6 setting can be applied to each routing rule after `||`, the additional setting are encoded in urlencoded format.

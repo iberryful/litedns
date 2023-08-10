@@ -76,6 +76,9 @@ impl DNSRequestHandler {
         {
             return Ok((vec![], ResponseCode::NXDomain));
         }
+        if request.query().query_type() == RecordType::HTTPS && !route.opts.enable_https {
+            return Ok((vec![], ResponseCode::Refused));
+        }
 
         info!(
             "DNS Request {} {} is dispatched to -> {}",
@@ -140,13 +143,17 @@ fn try_ipset_add(record: &Record, opts: &RuleOpts) -> Result<()> {
 #[async_trait::async_trait]
 impl RequestHandler for DNSRequestHandler {
     async fn handle_request<R: ResponseHandler>(&self, request: &Request, r: R) -> ResponseInfo {
-        debug!("New DNS Request: {:?}", request);
+        debug!(
+            "New DNS Request: {} {}",
+            request.query().query_type(),
+            request.query().name()
+        );
 
         let builder = MessageResponseBuilder::from_message_request(request);
         let mut header = Header::response_from_request(request.header());
 
         match request.query().query_type() {
-            RecordType::A | RecordType::AAAA => {}
+            RecordType::A | RecordType::AAAA | RecordType::HTTPS => {}
             _ => {
                 let res = builder.error_msg(&header, ResponseCode::Refused);
                 debug!(

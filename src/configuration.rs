@@ -86,6 +86,7 @@ pub struct RuleOpts {
     pub ipv6: Ipv6Setting,
     pub ipset4: Option<String>,
     pub ipset6: Option<String>,
+    pub enable_https: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -191,6 +192,7 @@ impl Default for RuleOpts {
             ipv6: Ipv6Setting::Enable,
             ipset4: None,
             ipset6: None,
+            enable_https: false,
         }
     }
 }
@@ -331,7 +333,7 @@ mod test {
                 }),
             ),
             (
-                "DOMAIN-SUFFIX,google.com,google||ipv6=disable",
+                "DOMAIN-SUFFIX,google.com,google||ipv6=disable&enable_https=true",
                 Ok(Rule::DomainSuffix {
                     value: "google.com".to_string(),
                     remote: "google".to_string(),
@@ -339,6 +341,7 @@ mod test {
                         ipv6: Ipv6Setting::Disable,
                         ipset4: None,
                         ipset6: None,
+                        enable_https: true,
                     },
                 }),
             ),
@@ -351,6 +354,7 @@ mod test {
                         ipv6: Ipv6Setting::Enable,
                         ipset4: Some("local".to_string()),
                         ipset6: None,
+                        enable_https: false,
                     },
                 }),
             ),
@@ -363,6 +367,7 @@ mod test {
                         ipv6: Ipv6Setting::Defer,
                         ipset4: None,
                         ipset6: Some("block".to_string()),
+                        enable_https: false,
                     },
                 }),
             ),
