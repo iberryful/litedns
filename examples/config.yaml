@@ -10,6 +10,7 @@ remotes:
     uris:
       - doh://8.8.8.8?sni=dns.google
       - doh://8.8.4.4?sni=dns.google
+    proxy: socks5://127.0.0.1:3333
 
 rules:
   - DOMAIN-SUFFIX, google.com, google || ipv6=disable

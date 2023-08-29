@@ -10,6 +10,7 @@ Litedns is a lightweight DNS server written in Rust. It's design to be simple an
 - [x] built-in ipv6 setting
 - [x] built with musl, no annoying glibc version issues
 - [x] ipset support
+- [x] socks5 proxy support
 
 ## Usage
 
@@ -35,6 +36,7 @@ remotes:
     uris:
       - doh://8.8.8.8?sni=dns.google
       - doh://8.8.4.4?sni=dns.google
+    proxy: socks5://user:pass@localhost:1080
 
 rules:
   - DOMAIN-SUFFIX, google.com, google || ipv6=disable
@@ -64,4 +66,8 @@ ipv6 setting can be one of the following values:
 ### geosite
 Litedns embeds [geosite](https://github.com/Loyalsoldier/v2ray-rules-dat) database, it can be used to route DNS request based on client's location.
 There is no need to download geosite database manually.
+
+### proxy
+Litedns support connecting to remote DNS server via proxy, currently only socks5 proxy is supported. 
+Please be noted that UDP DNS is not supported by socks5 proxy
 

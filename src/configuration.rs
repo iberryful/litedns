@@ -15,6 +15,7 @@ pub enum Protocol {
     UDP,
     DOT,
     DOH,
+    SOCKS5,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -25,7 +26,7 @@ pub struct ServerConfig {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(try_from = "String")]
 pub struct Endpoint {
-    pub protocol: Protocol,
+    pub protocol: DnsProtocol,
     pub host: IpAddr,
     pub port: u16,
     pub sni: Option<String>,
@@ -34,10 +35,20 @@ pub struct Endpoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(try_from = "String")]
+pub struct ProxyConfig {
+    pub protocol: Protocol,
+    pub addr: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct EndpointGroup {
     pub name: String,
     #[serde(alias = "uris")]
     pub endpoints: Vec<Endpoint>,
+    pub proxy: Option<ProxyConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -121,19 +132,53 @@ impl TryFrom<&str> for Protocol {
             "udp" => Ok(Protocol::UDP),
             "dot" => Ok(Protocol::DOT),
             "doh" => Ok(Protocol::DOH),
+            "socks5" => Ok(Protocol::SOCKS5),
             _ => Err(anyhow::anyhow!("Invalid protocol: {}", s)),
         }
     }
 }
 
-impl From<Protocol> for DnsProtocol {
-    fn from(protocol: Protocol) -> Self {
+impl TryFrom<Protocol> for DnsProtocol {
+    type Error = anyhow::Error;
+
+    fn try_from(protocol: Protocol) -> std::result::Result<Self, Self::Error> {
         match protocol {
-            Protocol::TCP => DnsProtocol::Tcp,
-            Protocol::UDP => DnsProtocol::Udp,
-            Protocol::DOT => DnsProtocol::Tls,
-            Protocol::DOH => DnsProtocol::Https,
+            Protocol::TCP => Ok(DnsProtocol::Tcp),
+            Protocol::UDP => Ok(DnsProtocol::Udp),
+            Protocol::DOT => Ok(DnsProtocol::Tls),
+            Protocol::DOH => Ok(DnsProtocol::Https),
+            _ => Err(anyhow::anyhow!("Invalid protocol: {:?}", protocol)),
         }
+    }
+}
+
+impl TryFrom<&str> for ProxyConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(s: &str) -> std::result::Result<Self, Self::Error> {
+        let url = Url::parse(s)?;
+        let protocol: Protocol = url.scheme().try_into()?;
+        if protocol != Protocol::SOCKS5 {
+            return Err(anyhow!("Invalid proxy protocol: {:?}", protocol));
+        }
+        let port = url.port().unwrap_or(protocol.default_port());
+        let addr = format!("{}:{}", url.host_str().unwrap(), port);
+        let username = Some(url.username().to_string()).filter(|s| !s.is_empty());
+        let password = url.password().map(|s| s.parse()).transpose()?;
+        Ok(ProxyConfig {
+            protocol,
+            addr,
+            username,
+            password,
+        })
+    }
+}
+
+impl TryFrom<String> for ProxyConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
+        Self::try_from(s.as_str())
     }
 }
 
@@ -149,7 +194,7 @@ impl TryFrom<&str> for Endpoint {
         let host = url.host_str().ok_or(anyhow!("missing host"))?;
 
         Ok(Endpoint {
-            protocol,
+            protocol: protocol.try_into()?,
             host: IpAddr::from_str(host)?,
             port,
             sni: queries.get("sni").cloned(),
@@ -180,7 +225,7 @@ impl From<EndpointGroup> for NameServerConfigGroup {
 
 impl From<Endpoint> for NameServerConfig {
     fn from(e: Endpoint) -> Self {
-        let mut config = NameServerConfig::new((e.host, e.port).into(), e.protocol.into());
+        let mut config = NameServerConfig::new((e.host, e.port).into(), e.protocol);
         config.tls_dns_name = e.sni;
         config
     }
@@ -267,6 +312,7 @@ impl Protocol {
             Protocol::UDP => 53,
             Protocol::DOT => 853,
             Protocol::DOH => 443,
+            Protocol::SOCKS5 => 1080,
         }
     }
 }
@@ -285,7 +331,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::configuration::{Configuration, Endpoint, Ipv6Setting, Protocol, Rule, RuleOpts};
+    use super::*;
     use std::net::{IpAddr, Ipv4Addr};
     use std::path::PathBuf;
 
@@ -304,7 +350,7 @@ mod test {
         assert_eq!(
             endpoint.unwrap(),
             Endpoint {
-                protocol: Protocol::DOH,
+                protocol: DnsProtocol::Https,
                 host: IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1)),
                 port: 443,
                 sni: Some("cloudflare-dns.com".to_string()),
@@ -312,6 +358,29 @@ mod test {
                 path: "/resolve".to_string(),
             }
         );
+    }
+
+    #[test]
+    fn test_parse_proxy_ok() {
+        let uri = "socks5://user:pass@localhost:1081";
+        let proxy = ProxyConfig::try_from(uri);
+        assert!(proxy.is_ok());
+        assert_eq!(
+            proxy.unwrap(),
+            ProxyConfig {
+                protocol: Protocol::SOCKS5,
+                addr: "localhost:1081".to_string(),
+                username: Some("user".to_string()),
+                password: Some("pass".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_proxy_err() {
+        let uri = "https://user:pass@localhost:1081";
+        let proxy = ProxyConfig::try_from(uri);
+        assert!(proxy.is_err());
     }
 
     #[test]

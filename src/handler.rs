@@ -10,23 +10,28 @@ use std::str::FromStr;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::error::ResolveErrorKind;
 use trust_dns_resolver::proto::rr::Record;
-use trust_dns_resolver::{AsyncResolver, Name, TokioAsyncResolver};
+use trust_dns_resolver::{AsyncResolver, Name};
+use trust_dns_resolver::name_server::GenericConnector;
 use trust_dns_server::authority::MessageResponseBuilder;
 use trust_dns_server::proto::op::{Header, ResponseCode};
 use trust_dns_server::proto::rr::RData;
 use trust_dns_server::proto::rr::rdata::SOA;
 use trust_dns_server::proto::rr::record_type::RecordType;
 use trust_dns_server::server::{Request, RequestHandler, ResponseHandler, ResponseInfo};
+use crate::proxy_runtime::{ProxyConnector, TokioRuntimeProxyProvider};
+
 /// DNS Request Handler
 #[derive(Clone)]
 pub struct DNSRequestHandler {
-    resolvers: HashMap<String, TokioAsyncResolver>,
+    resolvers: HashMap<String, AsyncResolver<GenericConnector<TokioRuntimeProxyProvider>>>,
     router: Router,
 }
 
 impl DNSRequestHandler {
     pub fn new(conf: Configuration) -> Result<Self> {
-        let resolvers: Result<HashMap<String, TokioAsyncResolver>> = conf
+        let resolvers: Result<
+            HashMap<String, AsyncResolver<GenericConnector<TokioRuntimeProxyProvider>>>,
+        > = conf
             .remotes
             .keys()
             .map(|name| {
@@ -39,8 +44,10 @@ impl DNSRequestHandler {
                     .get(name.as_str())
                     .ok_or(anyhow!("remote {} not found", name.as_str()))?
                     .clone();
-                let cfg = ResolverConfig::from_parts(None, vec![], eg);
-                let resolver = AsyncResolver::tokio(cfg, opt);
+                let cfg = ResolverConfig::from_parts(None, vec![], eg.clone());
+                let runtime: ProxyConnector =
+                    GenericConnector::new(TokioRuntimeProxyProvider::new(eg.proxy));
+                let resolver = AsyncResolver::new(cfg, opt, runtime);
                 Ok((name.clone(), resolver))
             })
             .collect();
@@ -215,7 +222,7 @@ fn gen_soa() -> Record {
 
 async fn single_resolve(
     req: &Request,
-    resolver: &TokioAsyncResolver,
+    resolver: &AsyncResolver<ProxyConnector>,
 ) -> Result<(Vec<Record>, ResponseCode)> {
     let res = resolver
         .lookup(req.query().name(), req.query().query_type())
@@ -236,7 +243,7 @@ async fn single_resolve(
 
 async fn dual_stack_resolve(
     req: &Request,
-    resolver: &TokioAsyncResolver,
+    resolver: &AsyncResolver<ProxyConnector>,
     opts: &RuleOpts,
     domain: String,
 ) -> (Vec<Record>, ResponseCode) {
