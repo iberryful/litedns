@@ -1,0 +1,10 @@
+[Unit]
+Description=litedns service
+After=network.target
+[Service]
+Type=simple
+RestartSec=10
+Restart=on-failure
+ExecStart=/usr/bin/litedns -c /etc/litedns.yaml
+[Install]
+WantedBy=multi-user.target
