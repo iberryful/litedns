@@ -6,5 +6,7 @@ Type=simple
 RestartSec=10
 Restart=on-failure
 ExecStart=/usr/bin/litedns -c /etc/litedns.yaml
+StandardOutput=file:/tmp/litedns.log
+StandardError=file:/tmp/litedns.log
 [Install]
 WantedBy=multi-user.target
