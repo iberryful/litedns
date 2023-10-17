@@ -158,6 +158,7 @@ impl RequestHandler for DNSRequestHandler {
 
         let builder = MessageResponseBuilder::from_message_request(request);
         let mut header = Header::response_from_request(request.header());
+        header.set_recursion_available(true);
 
         match request.query().query_type() {
             RecordType::A | RecordType::AAAA | RecordType::HTTPS => {}
