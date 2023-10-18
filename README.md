@@ -43,7 +43,7 @@ rules:
   - DOMAIN-KEYWORD, bing, google || ipv6=only
   - DOMAIN, baidu.com, 114 || ipv6=prefer
   - GEOSITE, NETFLIX, google || ipv6=defer&enable_https=true
-  - GEOSITE, CN, 114, ipset4=cn&ipset6=cn6
+  - GEOSITE, CN, 114 || ipset4=cn&ipset6=cn6
   - MATCH, google
 ```
 
